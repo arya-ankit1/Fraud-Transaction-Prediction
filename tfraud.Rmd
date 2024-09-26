@@ -1,0 +1,184 @@
+---
+title: "Fraud Prediction using Decision Tree"
+author: 2324244
+output: html_notebook
+---
+
+# Loading necessary libraries for the project
+```{r}
+install.packages('dplyr')
+install.packages('ggplot2')
+install.packages('tree')
+install.packages('randomForest')
+install.packages('rpart')
+install.packages('rpart.plot')
+install.packages('pROC')
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(rpart)
+library(tree)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(pROC)
+```
+
+# Reading the fraud dataset from a CSV file
+```{r}
+fraud_data <- read.csv('Fraud_Data1.csv', stringsAsFactors = T)
+```
+
+# Examine the structure of the dataset and display the first five rows
+```{r}
+str(fraud_data)
+
+head(fraud_data, 5)
+```
+
+# Visualize the distribution of transaction amounts using a histogram
+```{r}
+ggplot(fraud_data, aes(x = amount)) + 
+  geom_histogram(bins = 50) + scale_x_log10() + 
+  ggtitle("Distribution of Transaction Amounts")
+```
+
+# Creating a bar chart to show the average transaction amount by transaction type
+```{r}
+bar_chart <- ggplot(fraud_data,aes(x=type,y=amount,fill=type))+
+  geom_bar(stat = "summary", fun = "mean")+
+  labs(title = "Average amount by Transaction type", x="Trasaction Type", y="Amount")+
+  theme_minimal()
+print(bar_chart)
+```
+
+# Calculate and visualize average transaction amounts for fraud and non-fraud transactions
+```{r}
+average_fraud <- mean(fraud_data$amount[fraud_data$isFraud == 1])
+average_notfraud <- mean(fraud_data$amount[fraud_data$isFraud == 0])
+
+average_data <- data.frame(Category = c("Fraud", "Not Fraud"),
+                           Average = c(average_fraud, average_notfraud))
+
+print(average_data)
+
+ggplot(average_data, aes(x = Category, y = Average, fill = Category)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("Fraud" = "red", "Not Fraud" = "blue")) + 
+  labs(title = "Average Fraud vs Not Fraud", x = "Category", y = "Average") +
+  theme_minimal()
+```
+
+# Show the total number of fraudulent transactions by type
+```{r}
+sum_isFraud <- aggregate(isFraud ~ type, data = fraud_data, FUN = sum)
+ggplot(sum_isFraud,aes(x = type, y = isFraud))+
+  geom_bar(stat = "identity", fill = "red")+
+  labs(title = "Number of Fraud Transaction by Type", x="Trasaction Type", y="Sum of isFraud")+
+  theme_minimal()
+```
+
+# Histogram to show transaction amount distribution by fraud status
+```{r}
+ggplot(fraud_data, aes(x = amount, fill = as.factor(isFraud))) + 
+  geom_histogram(bins = 50, position = "identity", alpha = 0.5) + 
+  scale_x_log10() + 
+  ggtitle("Transaction Amount by Fraud Status")
+```
+
+# Pie chart showing the distribution of transaction types as a percentage
+```{r}
+per_trans_type <- prop.table(table(fraud_data$type))*100
+
+plot_fuel <- data.frame(
+  type = names(per_trans_type),
+  percentage = as.numeric(per_trans_type))
+
+ggplot(plot_fuel,aes(x="",y = percentage, fill=type,group=type))+
+  geom_bar(width = 1, stat = "identity",color = "black")+
+  geom_text(aes(label = paste0(round(percentage),"%")),position = position_stack(vjust = 0.5))+
+  coord_polar(theta = "y")+
+  labs(title = "Distribution of Transaction Type",fill="Transaction Type")+
+  theme_void()
+```
+
+# Pie chart showing the count of fraudulent versus non-fraudulent transactions
+```{r}
+fraud_count <- table(fraud_data$isFraud)
+
+count_fraud_data <- data.frame(Category = names(fraud_count), Count = as.numeric(fraud_count))
+
+ggplot(count_fraud_data , aes(x = "", y = Count, fill = Category)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y")+
+  labs(title = "Distribution of Transaction Type")+
+  scale_fill_manual(values = c("0" = "skyblue", "1" = "Red"))+
+  theme_void()+
+  theme(legend.position = "bottom")
+```
+
+# Data Preparation and Balancing
+
+```{r}
+# Separate the fraud and non-fraud transactions into two different data frames
+fraud_transactions <- fraud_data %>% filter(isFraud == 1)
+non_fraud_transactions <- fraud_data %>% filter(isFraud == 0)
+
+# Perform undersampling on the non-fraud transactions to match the number of fraud transactions
+set.seed(123) 
+non_fraud_undersampled <- non_fraud_transactions %>% sample_n(nrow(fraud_transactions))
+
+# Combine the undersampled non-fraud transactions with the fraud transactions to create a balanced dataset
+balanced_df <- rbind(fraud_transactions, non_fraud_undersampled)
+
+# balanced_df now contains an equal number of fraud and non-fraud transactions
+```
+
+# Split Data into Training and Test Sets
+```{r}
+set.seed(123)
+
+# Assuming balanced_df is your balanced dataset
+indices <- sample(1:nrow(balanced_df), size = 0.7 * nrow(balanced_df))
+train_data <- balanced_df[indices, ]
+test_data <- balanced_df[-indices, ]
+```
+
+# Model Building
+```{r}
+# Fit the model
+model <- rpart(isFraud ~ step + type + amount + oldbalanceOrg + newbalanceOrig, data = train_data, method = "class")
+
+# Plot the decision tree
+rpart.plot(model, main="Decision Tree for Fraud Detection")
+```
+
+# Model Evaluation
+```{r}
+# Make predictions
+predictions <- predict(model, test_data, type = "class")
+
+# Evaluate model performance
+confusionMatrix <- table(Predicted = predictions, Actual = test_data$isFraud)
+print(confusionMatrix)
+
+# You can also calculate accuracy, precision, recall, etc., based on the confusion matrix
+```
+
+# ROC Curve Analysis
+
+```{r}
+# Make predictions to get probabilities
+# Assuming the second column of the prediction gives the probability for class "1"
+predictions_prob <- predict(model, test_data, type = "prob")[,2]
+
+# Calculate ROC curve
+roc_result <- roc(test_data$isFraud, predictions_prob)
+
+# Plot ROC curve
+plot(roc_result, main="ROC Curve", col="#1c61b6")
+# Add AUC to the plot
+auc(roc_result)
+print(paste("AUC:", auc(roc_result)))
+```
+
