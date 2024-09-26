@@ -35,7 +35,7 @@ The dataset used in this project is sourced from Kaggle. It contains 6,000,000 t
 
 #### How to Run
 ##### 1. Clone the repository to your local machine:
-- Using link: https://github.com/your-username/FraudTransactionPrediction.git
+- Using link: https://github.com/your-username/Fraud-Transaction-Prediction.git
 
 ##### 2. Ensure you have the necessary dependencies installed:
 - R for running the R Markdown file (tfraud.Rmd).
